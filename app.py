@@ -86,7 +86,7 @@ with col2:
             with st.spinner("AI가 회의록을 분석중입니다..."):
                 try:
                     genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel("gemini-1.5-flash")
+                    model = genai.GenerativeModel("gemini-2.0-flash")
 
                     email_instruction = "\n## 📧 후속 이메일 초안\n회의 결과를 참석자들에게 공유할 이메일 초안을 작성해주세요." if include_email else ""
                     followup_instruction = "\n## 🔜 다음 회의 안건\n다음 회의에서 논의할 안건을 정리해주세요." if include_followup else ""
