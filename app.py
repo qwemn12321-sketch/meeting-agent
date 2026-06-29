@@ -1,5 +1,5 @@
 import streamlit as st
-import anthropic
+import google.generativeai as genai
 
 # 페이지 설정
 st.set_page_config(
@@ -29,9 +29,6 @@ st.markdown("""
         border-radius: 8px;
         margin-top: 1rem;
     }
-    .stTextArea textarea {
-        font-size: 0.95rem;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -39,28 +36,25 @@ st.markdown("""
 st.markdown('<div class="main-title">📋 회의록 정리 AI Agent</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">회의 내용을 붙여넣으면 자동으로 요약 · 액션아이템 · 핵심 결정사항을 정리해드립니다</div>', unsafe_allow_html=True)
 
-# 사이드바 - API 키 입력
+# 사이드바
 with st.sidebar:
     st.header("⚙️ 설정")
-    api_key = st.text_input("Anthropic API Key", type="password", placeholder="sk-ant-...")
-    
+    api_key = st.text_input("Google Gemini API Key", type="password", placeholder="AIza...")
+    st.caption("🔗 무료 발급: aistudio.google.com")
+
     st.markdown("---")
     st.markdown("**회의 유형 선택**")
     meeting_type = st.selectbox(
         "회의 유형",
         ["일반 회의", "주간 팀 회의", "프로젝트 킥오프", "의사결정 회의", "브레인스토밍"]
     )
-    
-    st.markdown("---")
-    st.markdown("**출력 언어**")
-    language = st.radio("언어", ["한국어", "English"])
-    
+
     st.markdown("---")
     st.markdown("**추가 옵션**")
     include_email = st.checkbox("이메일 초안 생성", value=False)
     include_followup = st.checkbox("다음 회의 안건 포함", value=True)
 
-# 메인 영역
+# 메인
 col1, col2 = st.columns([1, 1], gap="large")
 
 with col1:
@@ -78,44 +72,35 @@ with col1:
 김철수: 다음 주 월요일에 중간 점검 회의 잡겠습니다.
         """
     )
-    
     summarize_btn = st.button("🚀 회의록 정리하기", type="primary", use_container_width=True)
 
 with col2:
     st.subheader("✨ 정리 결과")
-    
+
     if summarize_btn:
         if not api_key:
-            st.error("❌ 사이드바에 Anthropic API Key를 입력해주세요!")
+            st.error("❌ 사이드바에 Gemini API Key를 입력해주세요!")
         elif not meeting_text.strip():
             st.error("❌ 회의 내용을 입력해주세요!")
         else:
             with st.spinner("AI가 회의록을 분석중입니다..."):
                 try:
-                    client = anthropic.Anthropic(api_key=api_key)
-                    
-                    email_instruction = """
-## 📧 후속 이메일 초안
-회의 결과를 참석자들에게 공유할 이메일 초안을 작성해주세요.
-""" if include_email else ""
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel("gemini-1.5-flash")
 
-                    followup_instruction = """
-## 🔜 다음 회의 안건
-다음 회의에서 논의할 안건을 정리해주세요.
-""" if include_followup else ""
+                    email_instruction = "\n## 📧 후속 이메일 초안\n회의 결과를 참석자들에게 공유할 이메일 초안을 작성해주세요." if include_email else ""
+                    followup_instruction = "\n## 🔜 다음 회의 안건\n다음 회의에서 논의할 안건을 정리해주세요." if include_followup else ""
 
-                    prompt = f"""
-당신은 전문 회의록 정리 AI입니다.
+                    prompt = f"""당신은 전문 회의록 정리 AI입니다.
 회의 유형: {meeting_type}
-출력 언어: {language}
 
-아래 회의 내용을 다음 형식으로 정리해주세요:
+아래 회의 내용을 다음 형식으로 한국어로 정리해주세요:
 
 ## 📋 회의 요약
 회의 목적과 주요 논의 내용을 3줄 이내로 간결하게 요약
 
 ## 👥 참석자
-참석자 목록과 역할 (확인 가능한 경우)
+참석자 목록과 역할
 
 ## ✅ 액션 아이템
 | 할 일 | 담당자 | 기한 |
@@ -124,28 +109,20 @@ with col2:
 
 ## 💡 핵심 결정 사항
 - 회의에서 최종 결정된 중요 사항들을 bullet point로
-
 {followup_instruction}
 {email_instruction}
 
 ---
 회의 내용:
-{meeting_text}
-"""
-                    
-                    response = client.messages.create(
-                        model="claude-sonnet-4-6",
-                        max_tokens=2000,
-                        messages=[{"role": "user", "content": prompt}]
-                    )
-                    
-                    result = response.content[0].text
-                    
+{meeting_text}"""
+
+                    response = model.generate_content(prompt)
+                    result = response.text
+
                     st.markdown('<div class="result-box">', unsafe_allow_html=True)
                     st.markdown(result)
                     st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    # 다운로드 버튼
+
                     st.download_button(
                         label="📥 결과 다운로드 (.txt)",
                         data=result,
@@ -153,7 +130,7 @@ with col2:
                         mime="text/plain",
                         use_container_width=True
                     )
-                    
+
                 except Exception as e:
                     st.error(f"오류가 발생했습니다: {str(e)}")
     else:
@@ -164,10 +141,9 @@ with col2:
         </div>
         """, unsafe_allow_html=True)
 
-# 하단 안내
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #999; font-size: 0.8rem;">
-    회의록 정리 AI Agent · Powered by Claude AI · SK 신입구성원 과정 사전과제
+    회의록 정리 AI Agent · Powered by Google Gemini · SK 신입구성원 과정 사전과제
 </div>
 """, unsafe_allow_html=True)
